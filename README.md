@@ -1,58 +1,145 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# FitTrack — API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+The REST API behind FitTrack, a fitness tracking web app. It serves the exercise
+library, training routines and articles, stores each member's workouts and body
+measurements, computes dashboard statistics, and powers the admin console and
+the chat assistant.
 
-## About Laravel
+The React front end lives in
+[fittrack-frontend](https://github.com/NitroDaxs/fittrack-frontend).
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Stack
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+PHP 8.3+ · Laravel 13 · Laravel Sanctum · MySQL · Scramble (OpenAPI docs)
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Features
 
-## Learning Laravel
+- **Token authentication** with Sanctum: register, log in, log out
+- **Two roles**, `member` and `admin`, with admin routes behind their own
+  middleware
+- **Exercise library** of around 300 seeded exercises, each with muscle groups,
+  equipment, difficulty, instructions and a video
+- **Routines** with day-by-day workouts, and **articles** on nutrition,
+  recovery and mindset
+- **Workout logging** with per-set weight and reps, plus body measurements
+- **Dashboard metrics**: consistency heatmap, per-exercise strength progression
+  and estimated one-rep max
+- **Favourites** for exercises and routines
+- **Admin CRUD** for exercises, routines, articles and users, with overview
+  stats and an activity feed
+- **Chat assistant** that answers questions from the database (see below)
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+## Getting started
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+Requires PHP 8.3 or newer, Composer and a MySQL server.
 
 ```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+composer install
+cp .env.example .env
+php artisan key:generate
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+Create a MySQL database and set `DB_DATABASE`, `DB_USERNAME` and `DB_PASSWORD`
+in `.env`. Then create the tables, load the seed data and start the server:
 
-## Contributing
+```bash
+php artisan migrate --seed
+php artisan serve
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+The API is served at http://localhost:8000/api.
 
-## Code of Conduct
+MySQL is required: one migration changes an `ENUM` column with MySQL-specific
+syntax, so SQLite and PostgreSQL will not run the migrations as they stand.
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+### Seeded accounts
 
-## Security Vulnerabilities
+| Role | Email | Password |
+| --- | --- | --- |
+| Admin | `admin@test.com` | `password123` |
+| Member | `member@test.com` | `password123` |
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+To give the member account a realistic training history, so the dashboard and
+history screens have data to show:
 
-## License
+```bash
+php artisan db:seed --class=MemberDataSeeder
+```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+## API overview
+
+All routes are prefixed with `/api`.
+
+| Area | Routes | Access |
+| --- | --- | --- |
+| Auth | `POST /register`, `POST /login`, `POST /logout` | Public (logout needs a token) |
+| Catalog | `GET /exercises`, `/routines`, `/articles`, each with `/{key}` | Public |
+| Taxonomies | `GET /taxonomies` | Public |
+| Chat | `POST /chat` | Public, 10 requests per minute per IP |
+| Profile | `GET /me`, `PUT /me`, `GET /me/favorites` | Member |
+| Favourites | `POST` and `DELETE` on `/exercises/{id}/save` and `/routines/{id}/save` | Member |
+| Dashboard | `GET /me/dashboard`, `GET /me/exercises/{id}/progression` | Member |
+| Workouts | `GET /me/workouts`, `POST /me/workouts`, `GET /me/workouts/{id}` | Member |
+| Measurements | `GET /me/measurements`, `POST /me/measurements` | Member |
+| Admin | `/admin/exercises`, `/admin/routines`, `/admin/articles`, `/admin/users`, `/admin/stats`, `/admin/activity` | Admin |
+
+Authenticated requests send the token from `/login` or `/register` as
+`Authorization: Bearer <token>`.
+
+Interactive documentation is generated from the code by Scramble. With the
+server running locally, open http://localhost:8000/docs/api.
+
+## Chat assistant
+
+The language model never answers from its own knowledge. Its only job is to
+classify the question into a topic and a few values (muscle group, equipment,
+goal and so on) as JSON. Every exercise, routine, article and number in the
+reply is then looked up in the database, so the assistant cannot invent an
+exercise that does not exist or a body weight the user never logged. Questions
+about a member's own data require a token.
+
+The model host is configurable:
+
+| `CHAT_PROVIDER` | Host | Settings |
+| --- | --- | --- |
+| `ollama` (default) | A local [Ollama](https://ollama.com) server | `OLLAMA_URL`, `OLLAMA_MODEL` |
+| `openai` | Any OpenAI-compatible API, for example Groq | `CHAT_API_URL`, `CHAT_API_KEY`, `CHAT_MODEL` |
+
+For local use, install Ollama and pull the default model:
+
+```bash
+ollama pull llama3.1:8b
+```
+
+## Configuration
+
+Beyond the standard Laravel settings, `.env` supports:
+
+| Variable | Purpose |
+| --- | --- |
+| `CORS_ALLOWED_ORIGINS` | Comma-separated front-end origins allowed to call the API. Defaults to `http://localhost:5173` |
+| `CHAT_PROVIDER` and the chat variables above | Which model host the chat assistant uses |
+
+## Project structure
+
+```
+app/
+  Enums/                    Roles, difficulty, exercise and article categories
+  Http/Controllers/Api/     Public and member endpoints
+  Http/Controllers/Api/Admin/   Admin endpoints
+  Http/Middleware/          EnsureUserIsAdmin
+  Http/Resources/           Response shaping for articles
+  Models/                   Eloquent models
+database/
+  migrations/               Schema
+  seeders/                  Seeders, with exercise data in seeders/data/exercises
+routes/api.php              All API routes
+```
+
+Exercise seed data is one file per body part; its format is documented in
+`database/seeders/data/exercises/README.md`.
+
+## Deployment
+
+`vercel.json` and `api/index.php` configure the app for Vercel's community PHP
+runtime. That setup is experimental and has not been verified in production.
