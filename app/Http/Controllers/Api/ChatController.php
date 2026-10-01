@@ -74,7 +74,7 @@ class ChatController extends Controller
 
         if (!$parsed) {
             return response()->json($this->payload(
-                "The assistant isn't available right now - is Ollama running?"
+                "The assistant isn't available right now - please try again in a moment."
             ));
         }
 
@@ -115,30 +115,47 @@ class ChatController extends Controller
             . "Set a field to null unless the user's message actually implies it. "
             . "Never invent exercise names or numbers -- the app supplies real data separately.";
 
+        $messages = [
+            ['role' => 'system', 'content' => $system],
+            ['role' => 'user', 'content' => $message],
+        ];
+
         try {
-            $response = Http::timeout(45)
-                ->post(config('services.ollama.url') . '/api/chat', [
-                    'model' => config('services.ollama.model'),
-                    'stream' => false,
-                    'format' => 'json',
-                    // Classification is not creative writing: we want the single
-                    // most likely answer every time, not a sample from the
-                    // distribution. Ollama defaults to 0.8, which makes the same
-                    // question land on different topics between runs.
-                    'options' => ['temperature' => 0],
-                    'messages' => [
-                        ['role' => 'system', 'content' => $system],
-                        ['role' => 'user', 'content' => $message],
-                    ],
-                ]);
+            // Classification is not creative writing: we want the single most
+            // likely answer every time, not a sample from the distribution.
+            // Left at a provider's default temperature, the same question lands
+            // on different topics between runs.
+            if (config('services.chat.provider') === 'openai') {
+                // Any OpenAI-compatible host (Groq in production). A serverless
+                // function can't reach an Ollama running on someone's machine.
+                $response = Http::timeout(20)
+                    ->withToken(config('services.chat.key'))
+                    ->post(rtrim(config('services.chat.url'), '/') . '/chat/completions', [
+                        'model' => config('services.chat.model'),
+                        'temperature' => 0,
+                        'response_format' => ['type' => 'json_object'],
+                        'messages' => $messages,
+                    ]);
+                $contentKey = 'choices.0.message.content';
+            } else {
+                $response = Http::timeout(45)
+                    ->post(config('services.ollama.url') . '/api/chat', [
+                        'model' => config('services.ollama.model'),
+                        'stream' => false,
+                        'format' => 'json',
+                        'options' => ['temperature' => 0],
+                        'messages' => $messages,
+                    ]);
+                $contentKey = 'message.content';
+            }
 
             if (!$response->successful()) {
                 return null;
             }
 
-            return json_decode($response->json('message.content'), true) ?: null;
+            return json_decode((string) $response->json($contentKey), true) ?: null;
         } catch (ConnectionException $e) {
-            // Ollama isn't running, or the host/port is wrong.
+            // The model host isn't running, or the host/port is wrong.
             return null;
         }
     }

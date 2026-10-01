@@ -38,6 +38,15 @@ return [
     'ollama' => [
         'url' => env('OLLAMA_URL', 'http://localhost:11434'),
         'model' => env('OLLAMA_MODEL', 'llama3.1:8b'),
-    ]
+    ],
+
+    // Which model host the chat classifier talks to: "ollama" (local dev) or
+    // "openai" for any OpenAI-compatible API, which is what production uses.
+    'chat' => [
+        'provider' => env('CHAT_PROVIDER', 'ollama'),
+        'url' => env('CHAT_API_URL', 'https://api.groq.com/openai/v1'),
+        'key' => env('CHAT_API_KEY'),
+        'model' => env('CHAT_MODEL', 'llama-3.1-8b-instant'),
+    ],
 
 ];
