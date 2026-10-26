@@ -3,10 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\SetLog;
-use App\Models\WorkoutLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class WorkoutController extends Controller
 {
@@ -35,25 +34,29 @@ class WorkoutController extends Controller
             'exercises.*.sets.*.reps' => 'nullable|integer|min:0',
         ]);
 
-        $log = $request->user()->workoutLogs()->create([
-            'workout_id' => $validated['workout_id'] ?? null,
-            'name' => $validated['name'],
-            'date' => $validated['date'] ?? now(),
-            'duration_minutes' => $validated['duration_minutes'] ?? null,
-            'notes' => $validated['notes'] ?? null,
-        ]);
+        $log = DB::transaction(function () use ($request, $validated) {
+            $log = $request->user()->workoutLogs()->create([
+                'workout_id' => $validated['workout_id'] ?? null,
+                'name' => $validated['name'],
+                'date' => $validated['date'] ?? now(),
+                'duration_minutes' => $validated['duration_minutes'] ?? null,
+                'notes' => $validated['notes'] ?? null,
+            ]);
 
-        foreach ($validated['exercises'] as $exercise) {
-            foreach ($exercise['sets'] as $index => $set) {
-                $log->setLogs()->create([
-                    'exercise_id' => $exercise['exercise_id'],
-                    'set_number' => $index + 1,
-                    'weight' => $set['weight'] ?? 0,
-                    'reps' => $set['reps'] ?? 0,
-                    'is_completed' => true,
-                ]);
+            foreach ($validated['exercises'] as $exercise) {
+                foreach ($exercise['sets'] as $index => $set) {
+                    $log->setLogs()->create([
+                        'exercise_id' => $exercise['exercise_id'],
+                        'set_number' => $index + 1,
+                        'weight' => $set['weight'] ?? 0,
+                        'reps' => $set['reps'] ?? 0,
+                        'is_completed' => true,
+                    ]);
+                }
             }
-        }
+
+            return $log;
+        });
 
         return response()->json(
             $log->load('setLogs.exercise'),
