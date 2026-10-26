@@ -11,10 +11,12 @@ class WorkoutController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
+        $perPage = $request->input('per_page', $request->input('per_page', 10));
+
         $logs = $request->user()->workoutLogs()
             ->with('setLogs.exercise')
             ->orderByDesc('date')
-            ->get();
+            ->paginate($perPage);
 
         return response()->json($logs);
     }
